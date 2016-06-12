@@ -7,6 +7,7 @@ class Matcher
 {
 public:
 	typedef	int32_t	chr_t;
+	const static chr_t	EOS = std::numeric_limits<chr_t>::max();
 
 private:
 	struct Node
@@ -14,10 +15,15 @@ private:
 		std::map<chr_t, int>	chrToNextIndex;
 		int	matchPatternno;
 
-		Node()
-			: matchPatternno(-1)
+		int	depth;
+		int	failIndex;
+		int	matchIndex;
+
+		explicit	Node( int depth_ )
+			:	depth(depth_),	matchPatternno(-1)
 		{}
 	};
+	const static int	INDEX_ROOT = 0;
 
 public:
 	class PatternDictionary
@@ -29,7 +35,7 @@ public:
 		PatternDictionary()
 		{
 			//index==0を作っておく
-			nodes.push_back(Node());
+			nodes.push_back(Node(0));
 		}
 	public:
 		// [it,it_e)をpatternNoのパターンとして登録する。
@@ -40,13 +46,17 @@ public:
 
 			int	index = 0;
 			for (; itChr != itChrE; itChr++) {
+				if (*itChr == EOS) {
+					//パターン不正
+					throw	std::exception();
+				}
 				Node&	pat = nodes[index];
 				std::map<chr_t, int>::iterator	it = pat.chrToNextIndex.find(*itChr);
 				if (it == pat.chrToNextIndex.end()) {
 					int	next = nodes.size();
 					pat.chrToNextIndex.insert(std::make_pair(*itChr,next));
 
-					nodes.push_back(Node());	//patが無効になる場合あり
+					nodes.push_back(Node(pat.depth+1));	//patが無効になる場合あり
 					index = next;
 				}else {
 					index = it->second;
@@ -63,6 +73,64 @@ public:
 		//	登録したパターン群にマッチするMatcherを作る。
 		std::auto_ptr<Matcher>	buildMatcher()
 		{
+			struct QueueItem
+			{
+				int	indexPrev;
+				int	index;
+				chr_t	chr;
+
+				QueueItem(int index_, int indexPrev_, chr_t chr_)
+					: index(index_), indexPrev(indexPrev_), chr(chr_)
+				{}
+			};
+
+			std::deque< QueueItem >	queue;
+
+			{
+				Node& node = nodes[INDEX_ROOT];
+				node.failIndex = -1;	//番兵
+				node.matchIndex = -1;
+
+				for (std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.begin(), itE = node.chrToNextIndex.end(); it != itE; it++) {
+					queue.push_back(QueueItem(it->second, 0, it->first));
+				}
+			}
+
+			while (queue.size() > 0) {
+				const QueueItem&	item = queue.front();
+				Node& node = nodes[item.index];
+				const Node& nodePrev = nodes[item.indexPrev];
+
+				node.matchIndex = (node.matchPatternno >= 0) ? item.index : nodePrev.matchIndex;
+
+				node.failIndex = INDEX_ROOT;
+
+				if (node.matchPatternno<0 
+						//マッチパターンが存在せず
+					&& item.indexPrev != INDEX_ROOT
+						//かつ、前ノードがルートでない(=depthが1より大きい)
+						//	場合のみfailがルート以外になりうる
+				) {
+					int	f = nodePrev.failIndex;
+					while (f >= 0 ) {
+						auto& prev_chrTo = nodes[f].chrToNextIndex;
+						auto it = prev_chrTo.find(item.chr);
+						if (it != prev_chrTo.end()) {
+							node.failIndex = it->second;
+							break;
+						}
+
+						f = nodes[f].failIndex;
+					}
+				}
+
+				for (std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.begin(), itE = node.chrToNextIndex.end(); it != itE; it++) {
+					queue.push_back( QueueItem(it->second, item.index, it->first) );
+				}
+
+				queue.pop_front();
+			}
+			nodes[INDEX_ROOT].failIndex = INDEX_ROOT;
 			return	std::auto_ptr<Matcher>(new Matcher(nodes));
 		}
 	};
@@ -107,48 +175,72 @@ public:
 		std::vector<MatchResult>&	results = *pResults;
 		results.clear();
 
-		std::vector<chr_t>::const_iterator itCurChr = itChr;
-		while (itCurChr != itChrE) {
-			int	patternno_best = -1;
-			std::vector<chr_t>::const_iterator itChr_best;
+		int	index = INDEX_ROOT;
+		for (; itChr != itChrE; itChr++) {
+			index = travaseNodeTri(&results, index, *itChr);
+		}
 
-			//itCurChrを末尾まで繰り返しながら、たどれるところまでトライをたどっていく
-			int	index = 0;
-			const Node	*pNode = &(nodes[index]);
-			std::vector<chr_t>::const_iterator itC = itCurChr;
-			while ( itC != itChrE ) {
-				std::map<chr_t, int>::const_iterator	it = pNode->chrToNextIndex.find(*itC);
-				if (it == pNode->chrToNextIndex.end()) {
-					//遷移先がないので抜ける
-					break;
-				}
+		if (index != INDEX_ROOT) {
+			//indexがルートでない
+			//←マッチ途中
+			//→終端させるためにパターンに含まれない文字EOSを読み込ませてindexをルートにまで戻す
+			index = travaseNodeTri(&results, index, EOS);
 
-				index = it->second;
-				itC++;
+			//「EOSを読み飛ばす」が末尾に出力されているので除去
+			results.pop_back();
+		}
+		assert(index == INDEX_ROOT);
+	}
 
-				pNode = &(nodes[index]);
-				if (pNode->matchPatternno>=0 ) {
-					//遷移先がパターンにマッチしている。
-					//この先でより長いパターンにマッチする可能性があるので、一時記録しておく。
-					patternno_best = pNode->matchPatternno;
-					itChr_best = itC;
-				}
+private:
+	//	startIndexノードの状態でchr文字を読み込んで状態遷移した先のノードindexを返す。遷移中に確定したマッチ結果を*pResultに追記する。
+	int		travaseNodeTri(std::vector<MatchResult> *pResults, int startIndex, chr_t chr )	const
+	{
+		std::vector<MatchResult>&	results = *pResults;
+
+		int	index = startIndex;
+		while (true) {
+			const Node&	node = nodes[index];
+			std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.find(chr);
+			if (it != node.chrToNextIndex.end()) {
+				//注目文字で遷移できる
+				//	遷移して次の文字に進む
+				return	it->second;
 			}
+			else {
+				//注目文字で遷移できない
+				if (index == INDEX_ROOT) {
+					//ルートなので1文字読み飛ばしを出力して次の文字に進む
+					results.push_back(MatchResult());
+					return	INDEX_ROOT;
+				}
+				else {
+					int	lastDepth;
+					if (node.matchIndex >= INDEX_ROOT) {
+						//経路上にマッチしたパターンがあった
+						const	Node&	matchNode = nodes[node.matchIndex];
 
-			if (patternno_best >= 0) {
-				//途中でパターンにマッチしていたことがある。
-				//	最期にマッチしていたパターンを出力
-				results.push_back(MatchResult(std::distance(itCurChr, itChr_best), patternno_best));
+						//パターン出力
+						results.push_back(MatchResult(matchNode.depth, matchNode.matchPatternno));
 
-				//	最期にマッチしていた直後に進む
-				itCurChr = itChr_best;
-			}else{
-				//一度もマッチしたことがない。
-				//	マッチなしを出力
-				results.push_back(MatchResult());
+						lastDepth = node.depth - matchNode.depth;
 
-				//	次に進む
-				itCurChr++;
+					}
+					else {
+						//経路上にマッチしたパターンはなかった
+						lastDepth = node.depth;
+					}
+
+					//fail遷移で注目ノードのdepthが浅くなる = マッチしなかった文字を読み飛ばしている
+					//読み飛ばした文字分を出力
+					int	skipnum = lastDepth - nodes[node.failIndex].depth;
+					for (int i = 0; i < skipnum; i++) {
+						results.push_back(MatchResult());
+					}
+
+					//fail遷移して同じ文字でもう一度処理
+					index = node.failIndex;
+				}
 			}
 		}
 	}
