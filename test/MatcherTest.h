@@ -42,7 +42,7 @@ private:
 
 public:
 	// [it,it_e)をpatternNoのパターンとして登録する。
-	void	addPattern( const chr_t* it, const chr_t* it_e, int patternNo)
+	void	addPattern(std::vector<chr_t>::const_iterator it, std::vector<chr_t>::const_iterator it_e, int patternNo)
 	{
 		patterns.push_back(Pattern(std::vector<chr_t>(it, it_e), patternNo));
 	}
@@ -125,6 +125,7 @@ class MatcherTest : public CPPUNIT_NS::TestFixture
 {
 	CPPUNIT_TEST_SUITE(MatcherTest);
 	CPPUNIT_TEST(test1);
+	CPPUNIT_TEST(test2);
 	CPPUNIT_TEST_SUITE_END();
 
 private:
@@ -141,48 +142,73 @@ public:
 
 	void test1()
 	{
-		addPattern('a', 'c', 0);
-		int	patternNoOf_bab = 1;
-		addPattern('b', 'a', 'b', patternNoOf_bab);
-		addPattern('a', 'b', 'c', 2);
-		addPattern('a', 'b', 'c', 'd', 'e', 3);
-		addPattern('d', 'f', 4);
+		std::string	pat_a[] = {
+			"ac",	"abc",	"abcde",	"bab",	"df",
+		};
+		size_t	patnum = sizeof(pat_a) / sizeof(*pat_a);
+		std::string	str(
+			"xbabcdex"
+		);
+		std::string	expect_a[] = {
+			"x","bab","c","d","e","x"
+			//	貪欲マッチなのでパターン長の長いabcdeよりもbabがマッチする。 
+		};
+		size_t	expectnum = sizeof(expect_a) / sizeof(*expect_a);
 
-		Matcher::chr_t	chr_a[] = {'x','b','a','b','c','d','e','x'};
-		std::vector<Matcher::chr_t>	chrs( chr_a, chr_a+sizeof(chr_a)/sizeof(*chr_a) );
+		commonTestParts_matchWhole(pat_a, patnum, str, expect_a, expectnum, CPPUNIT_SOURCELINE() );
+	}
+
+	void test2()
+	{
+		std::string	pat_a[] = {
+			"ac",	"abc",	"abcde",	"bab",	"df",
+		};
+		size_t	patnum = sizeof(pat_a) / sizeof(*pat_a);
+		std::string	str(
+			"xabcdex"
+		);
+		std::string	expect_a[] = {
+			"x","abcde","x"
+			//	最長一致なので、abcよりもabcdeがマッチする。 
+		};
+		size_t	expectnum = sizeof(expect_a) / sizeof(*expect_a);
+
+		commonTestParts_matchWhole(pat_a, patnum, str, expect_a, expectnum, CPPUNIT_SOURCELINE());
+	}
+private:
+	void	commonTestParts_matchWhole( const std::string* pat_a, size_t patnum, const std::string& str, const std::string* expect_a, size_t expectnum, const ::CppUnit::SourceLine& sourceLine )
+	{
+		std::map<std::string, int>	patternToNo;
+		for (int i = 0; i<patnum; i++) {
+			std::vector<Matcher::chr_t>	chrs(pat_a[i].begin(), pat_a[i].end());
+			int	patternNo = i;
+			pMatcher->addPattern(chrs.begin(), chrs.end(), i);
+
+			patternToNo.insert(std::make_pair(pat_a[i], i));
+		}
 
 		std::vector<Matcher::MatchResult>	expects;
-		expects.push_back(Matcher::MatchResult());		//	x
-		expects.push_back(Matcher::MatchResult(3, patternNoOf_bab));	//	b a b
-		expects.push_back(Matcher::MatchResult());		//	c
-		expects.push_back(Matcher::MatchResult());		//	d
-		expects.push_back(Matcher::MatchResult());		//	e
-		expects.push_back(Matcher::MatchResult());		//	x
+		for (int i = 0; i < expectnum; i++) {
+			const std::string&	expect = expect_a[i];
+			std::map<std::string, int>::const_iterator it = patternToNo.find(expect);
+			if (it != patternToNo.end()) {
+				expects.push_back(Matcher::MatchResult(expect.size(), it->second));
+			}else{
+				if (expect.size() == 1) {
+					expects.push_back(Matcher::MatchResult());
+				}else{
+					//テストコードのミス
+					CPPUNIT_FAIL("expect ["+expect+"] is not registed.");
+				}
+			}
+		}
+
+		std::vector<Matcher::chr_t>	chrs(str.begin(), str.end());
 
 		std::vector<Matcher::MatchResult>	results;
 		pMatcher->matchWhole(&results, chrs.begin(), chrs.end());
 
-		CPPUNIT_ASSERT_EQUAL(expects, results);
-	}
-	void	addPattern(Matcher::chr_t c0, Matcher::chr_t c1, int patternNo)
-	{
-		const	Matcher::chr_t	c_a[] = { c0, c1 };
-		pMatcher->addPattern(c_a, c_a + sizeof(c_a) / sizeof(*c_a), patternNo);
-	}
-	void	addPattern(Matcher::chr_t c0, Matcher::chr_t c1, Matcher::chr_t c2, int patternNo)
-	{
-		const	Matcher::chr_t	c_a[] = { c0, c1, c2 };
-		pMatcher->addPattern(c_a, c_a + sizeof(c_a) / sizeof(*c_a), patternNo);
-	}
-	void	addPattern(Matcher::chr_t c0, Matcher::chr_t c1, Matcher::chr_t c2, Matcher::chr_t c3, int patternNo)
-	{
-		const	Matcher::chr_t	c_a[] = { c0, c1, c2, c3 };
-		pMatcher->addPattern(c_a, c_a + sizeof(c_a) / sizeof(*c_a), patternNo);
-	}
-	void	addPattern(Matcher::chr_t c0, Matcher::chr_t c1, Matcher::chr_t c2, Matcher::chr_t c3, Matcher::chr_t c4, int patternNo)
-	{
-		const	Matcher::chr_t	c_a[] = { c0, c1, c2, c3, c4 };
-		pMatcher->addPattern(c_a, c_a + sizeof(c_a) / sizeof(*c_a), patternNo);
+		CPPUNIT_NS::assertEquals(expects, results, sourceLine, "");
 	}
 };
 
