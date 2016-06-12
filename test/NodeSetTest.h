@@ -38,7 +38,7 @@ public:
 			}
 		}
 
-		std::map<int, int>	nodeIdxToNsIdx;
+		std::vector<int>	nodeIdxToNsIdx;
 		std::auto_ptr<NodeSet>	pNs(NodeSet::buildFromNodeList(&nodeIdxToNsIdx,nodes));
 
 		CPPUNIT_ASSERT_EQUAL( 0, nodeIdxToNsIdx[0] );
@@ -48,8 +48,18 @@ public:
 
 			int	nsIdx = nodeIdxToNsIdx[nodeIdx];
 			CPPUNIT_ASSERT_EQUAL(node.depth, pNs->getDepth(nsIdx));
-			CPPUNIT_ASSERT_EQUAL(node.failIndex, pNs->getFailIndex(nsIdx));
-			CPPUNIT_ASSERT_EQUAL(node.matchIndex, pNs->getMatchIndex(nsIdx));
+			if (node.failIndex < 0) {
+				CPPUNIT_ASSERT(pNs->getFailIndex(nsIdx)<0);
+			}
+			else {
+				CPPUNIT_ASSERT_EQUAL(nodeIdxToNsIdx[node.failIndex], pNs->getFailIndex(nsIdx));
+			}
+			if (node.matchIndex < 0) {
+				CPPUNIT_ASSERT(pNs->getMatchIndex(nsIdx)<0);
+			}
+			else {
+				CPPUNIT_ASSERT_EQUAL(nodeIdxToNsIdx[node.matchIndex], pNs->getMatchIndex(nsIdx));
+			}
 			CPPUNIT_ASSERT_EQUAL(node.matchPatternno, pNs->getMatchPatternno(nsIdx));
 
 			const std::map<NodeSet::chr_t, int>& chrToIdx = node.chrToNextIndex;
