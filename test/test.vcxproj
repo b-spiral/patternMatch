@@ -235,11 +235,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\Matcher.h" />
+    <ClInclude Include="..\src\NodeSet.h" />
     <ClInclude Include="MatcherTest.h" />
+    <ClInclude Include="NodeSetTest.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MatcherTest.cpp" />
+    <ClCompile Include="NodeSetTest.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

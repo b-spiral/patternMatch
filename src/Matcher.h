@@ -6,40 +6,28 @@
 #include <deque>
 #include <ostream>
 #include <cassert>
+#include "NodeSet.h"
 
 class Matcher
 {
 public:
-	typedef	int32_t	chr_t;
+	typedef	NodeSet::chr_t	chr_t;
 	const static chr_t	EOS = std::numeric_limits<chr_t>::max();
 
 private:
-	struct Node
-	{
-		std::map<chr_t, int>	chrToNextIndex;
-		int	matchPatternno;
-
-		int	depth;
-		int	failIndex;
-		int	matchIndex;
-
-		explicit	Node(int depth_)
-			: depth(depth_), matchPatternno(-1)
-		{}
-	};
 	const static int	INDEX_ROOT = 0;
 
 public:
 	class PatternDictionary
 	{
 	private:
-		std::vector<Node>	nodes;
+		std::vector<NodeSet::Node>	nodes;
 
 	public:
 		PatternDictionary()
 		{
 			//index==0を作っておく
-			nodes.push_back(Node(0));
+			nodes.push_back(NodeSet::Node(0));
 		}
 	public:
 		// [it,it_e)をpatternNoのパターンとして登録する。
@@ -54,13 +42,13 @@ public:
 					//パターン不正
 					throw	std::exception();
 				}
-				Node&	pat = nodes[index];
+				NodeSet::Node&	pat = nodes[index];
 				std::map<chr_t, int>::iterator	it = pat.chrToNextIndex.find(*itChr);
 				if (it == pat.chrToNextIndex.end()) {
 					int	next = nodes.size();
 					pat.chrToNextIndex.insert(std::make_pair(*itChr, next));
 
-					nodes.push_back(Node(pat.depth + 1));	//patが無効になる場合あり
+					nodes.push_back(NodeSet::Node(pat.depth + 1));	//patが無効になる場合あり
 					index = next;
 				}
 				else {
@@ -92,7 +80,7 @@ public:
 			std::deque< QueueItem >	queue;
 
 			{
-				Node& node = nodes[INDEX_ROOT];
+				NodeSet::Node& node = nodes[INDEX_ROOT];
 				node.failIndex = -1;	//番兵
 				node.matchIndex = -1;
 
@@ -103,8 +91,8 @@ public:
 
 			while (queue.size() > 0) {
 				const QueueItem&	item = queue.front();
-				Node& node = nodes[item.index];
-				const Node& nodePrev = nodes[item.indexPrev];
+				NodeSet::Node& node = nodes[item.index];
+				const NodeSet::Node& nodePrev = nodes[item.indexPrev];
 
 				node.matchIndex = (node.matchPatternno >= 0) ? item.index : nodePrev.matchIndex;
 
@@ -164,54 +152,11 @@ public:
 	};
 
 private:
-	class NodeSet
-	{
-	public:
-		explicit	NodeSet(const std::vector<Node>& nodes_)
-			: nodes(nodes_)
-		{}
-
-	private:
-		std::vector<Node>	nodes;
-
-	public:
-		std::pair<bool, int>	searchNext(int index, chr_t chr)	const
-		{
-			const Node&	node = nodes[index];
-			std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.find(chr);
-			if (it != node.chrToNextIndex.end()) {
-				return	std::make_pair(true, it->second);
-			}
-			else {
-				return	std::make_pair(false, -1);
-			}
-		}
-		int	getMatchIndex(int index)	const
-		{
-			const Node&	node = nodes[index];
-			return	node.matchIndex;
-		}
-		int	getFailIndex(int index)	const
-		{
-			const Node&	node = nodes[index];
-			return	node.failIndex;
-		}
-		int	getDepth(int index)	const
-		{
-			const Node&	node = nodes[index];
-			return	node.depth;
-		}
-		int	getMatchPatternno(int index)	const
-		{
-			const Node&	node = nodes[index];
-			return	node.matchPatternno;
-		}
-	};
 	NodeSet	ns;
 
 private:
 	//	see. PatternDictionary::buildMatcher()
-	explicit	Matcher(const std::vector<Node>& nodes_)
+	explicit	Matcher(const std::vector<NodeSet::Node>& nodes_)
 		: ns(nodes_)
 	{}
 
