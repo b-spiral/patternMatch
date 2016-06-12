@@ -198,6 +198,38 @@ public:
 	}
 
 private:
+	std::pair<bool, int>	searchNext(int index, chr_t chr)	const
+	{
+		const Node&	node = nodes[index];
+		std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.find(chr);
+		if (it != node.chrToNextIndex.end()) {
+			return	std::make_pair(true, it->second);
+		}
+		else {
+			return	std::make_pair(false, -1);
+		}
+	}
+	int	getMatchIndex(int index)	const
+	{
+		const Node&	node = nodes[index];
+		return	node.matchIndex;
+	}
+	int	getFailIndex(int index)	const
+	{
+		const Node&	node = nodes[index];
+		return	node.failIndex;
+	}
+	int	getDepth(int index)	const
+	{
+		const Node&	node = nodes[index];
+		return	node.depth;
+	}
+	int	getMatchPatternno(int index)	const
+	{
+		const Node&	node = nodes[index];
+		return	node.matchPatternno;
+	}
+
 	//	startIndexノードの状態でchr文字を読み込んで状態遷移した先のノードindexを返す。遷移中に確定したマッチ結果を*pResultに追記する。
 	int		travaseNodeTri(std::vector<MatchResult> *pResults, int startIndex, chr_t chr)	const
 	{
@@ -205,12 +237,11 @@ private:
 
 		int	index = startIndex;
 		while (true) {
-			const Node&	node = nodes[index];
-			std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.find(chr);
-			if (it != node.chrToNextIndex.end()) {
+			std::pair<bool, int>	next = searchNext(index, chr);
+			if ( next.first ) {
 				//注目文字で遷移できる
 				//	遷移して次の文字に進む
-				return	it->second;
+				return	next.second;
 			}
 			else {
 				//注目文字で遷移できない
@@ -221,30 +252,29 @@ private:
 				}
 				else {
 					int	lastDepth;
-					if (node.matchIndex >= INDEX_ROOT) {
+					if (getMatchIndex(index) >= INDEX_ROOT) {
 						//経路上にマッチしたパターンがあった
-						const	Node&	matchNode = nodes[node.matchIndex];
 
 						//パターン出力
-						results.push_back(MatchResult(matchNode.depth, matchNode.matchPatternno));
+						results.push_back(MatchResult(getDepth(getMatchIndex(index)), getMatchPatternno(getMatchIndex(index))) );
 
-						lastDepth = node.depth - matchNode.depth;
+						lastDepth = getDepth(index) - getDepth(getMatchIndex(index));
 
 					}
 					else {
 						//経路上にマッチしたパターンはなかった
-						lastDepth = node.depth;
+						lastDepth = getDepth(index);
 					}
 
 					//fail遷移で注目ノードのdepthが浅くなる = マッチしなかった文字を読み飛ばしている
 					//読み飛ばした文字分を出力
-					int	skipnum = lastDepth - nodes[node.failIndex].depth;
+					int	skipnum = lastDepth - getDepth( getFailIndex(index) );
 					for (int i = 0; i < skipnum; i++) {
 						results.push_back(MatchResult());
 					}
 
 					//fail遷移して同じ文字でもう一度処理
-					index = node.failIndex;
+					index = getFailIndex(index);
 				}
 			}
 		}
