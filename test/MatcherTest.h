@@ -7,20 +7,34 @@ class Matcher
 {
 public:
 	typedef	int32_t	chr_t;
-	
+
+private:
+	struct Pattern
+	{
+		std::vector<chr_t>	chrs;
+		int	patternNo;
+		Pattern(const std::vector<chr_t>& chrs_, int patternNo_)
+			: chrs(chrs_), patternNo(patternNo_)
+		{}
+	};
+
+public:
 	class PatternDictionary
 	{
+	private:
+		std::vector<Pattern>	patterns;
+
 	public:
 		// [it,it_e)をpatternNoのパターンとして登録する。
 		void	addPattern(std::vector<chr_t>::const_iterator it, std::vector<chr_t>::const_iterator it_e, int patternNo)
 		{
-			throw	std::exception();
+			patterns.push_back(Pattern(std::vector<chr_t>(it, it_e), patternNo));
 		}
 
 		//	登録したパターン群にマッチするMatcherを作る。
 		std::auto_ptr<Matcher>	buildMatcher()
 		{
-			throw	std::exception();
+			return	std::auto_ptr<Matcher>(new Matcher(patterns));
 		}
 	};
 
@@ -46,15 +60,13 @@ public:
 	};
 
 private:
-	struct Pattern
-	{
-		std::vector<chr_t>	chrs;
-		int	patternNo;
-		Pattern(const std::vector<chr_t>& chrs_, int patternNo_)
-			: chrs(chrs_), patternNo(patternNo_)
-		{}
-	};
 	std::vector<Pattern>	patterns;
+
+private:
+	//	see. PatternDictionary::buildMatcher()
+	explicit	Matcher(const std::vector<Pattern>& patterns_)
+		: patterns(patterns_)
+	{}
 
 public:
 	// [itChr,itChrE)のchr_t列を登録されているパターン列で分割し、*pResultに書き込む。
