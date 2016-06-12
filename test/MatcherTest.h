@@ -14,13 +14,19 @@ public:
 
 		//size_文字のchrが、登録されたパターンpatternNo_にマッチする、を表わすMatchResultを構築する。
 		MatchResult(int size_, int patternNo_)
-			: size(size_), patternNo(patternNo_)
+			:	size(size_),	patternNo(patternNo_)
 		{}
 
 		//1chrが登録されたパターンにマッチしない、を表わすMatchResultを構築する。
 		MatchResult()
 			: size(1), patternNo(-1)
 		{}
+
+		bool	operator==(const MatchResult& rhs)	const
+		{
+			const MatchResult& lhs = *this;
+			return	lhs.size == rhs.size && lhs.patternNo == rhs.patternNo;
+		}
 	};
 
 public:
@@ -35,6 +41,46 @@ public:
 	void	matchWhole(std::vector<MatchResult> *pResults, std::vector<chr_t>::const_iterator itChr, std::vector<chr_t>::const_iterator itChrE)	const
 	{
 		throw	std::exception();
+	}
+};
+
+inline	std::ostream&	operator<<(std::ostream& ostm, const Matcher::MatchResult& res)
+{
+	ostm << "{s:" << res.size;
+	if (res.patternNo >= 0) {
+		ostm << ", p:" << res.patternNo;
+	}else{
+		ostm << ", p:unmatch";
+	}
+	ostm << "}";
+	return	ostm;
+}
+
+
+//std::vector<Matcher::MatchResult>	expects, results;
+//...
+//CPPUNIT_ASSERT_EQUAL(expects, results); を動作させるためのテンプレート特殊化
+template<> struct ::CppUnit::assertion_traits< std::vector<Matcher::MatchResult> >
+{
+	static bool equal(const std::vector<Matcher::MatchResult>& x, const std::vector<Matcher::MatchResult>& y)
+	{
+		return x == y;
+	}
+
+	static std::string toString(const std::vector<Matcher::MatchResult>& x)
+	{
+		std::ostringstream	ost;
+		const char*	sep = "MatchResult[";
+		if (x.size()) {
+			for (std::vector<Matcher::MatchResult>::const_iterator it = x.begin(), it_f = x.end(); it != it_f; it++) {
+				ost << sep << *it;
+				sep = ",";
+			}
+		}else{
+			ost << sep;
+		}
+		ost << "]";
+		return ost.str();
 	}
 };
 
