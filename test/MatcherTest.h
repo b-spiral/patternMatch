@@ -9,12 +9,12 @@ public:
 	typedef	int32_t	chr_t;
 
 private:
-	struct Pattern
+	struct Node
 	{
 		std::map<chr_t, int>	chrToNextIndex;
 		int	matchPatternno;
 
-		Pattern()
+		Node()
 			: matchPatternno(-1)
 		{}
 	};
@@ -23,13 +23,13 @@ public:
 	class PatternDictionary
 	{
 	private:
-		std::vector<Pattern>	patterns;
+		std::vector<Node>	nodes;
 
 	public:
 		PatternDictionary()
 		{
 			//index==0を作っておく
-			patterns.push_back(Pattern());
+			nodes.push_back(Node());
 		}
 	public:
 		// [it,it_e)をpatternNoのパターンとして登録する。
@@ -40,30 +40,30 @@ public:
 
 			int	index = 0;
 			for (; itChr != itChrE; itChr++) {
-				Pattern&	pat = patterns[index];
+				Node&	pat = nodes[index];
 				std::map<chr_t, int>::iterator	it = pat.chrToNextIndex.find(*itChr);
 				if (it == pat.chrToNextIndex.end()) {
-					int	next = patterns.size();
+					int	next = nodes.size();
 					pat.chrToNextIndex.insert(std::make_pair(*itChr,next));
 
-					patterns.push_back(Pattern());	//patが無効になる場合あり
+					nodes.push_back(Node());	//patが無効になる場合あり
 					index = next;
 				}else {
 					index = it->second;
 				}
 			}
 
-			if (patterns[index].matchPatternno >= 0) {
+			if (nodes[index].matchPatternno >= 0) {
 				//パターン重複
 				throw	std::exception();
 			}
-			patterns[index].matchPatternno = patternNo;
+			nodes[index].matchPatternno = patternNo;
 		}
 
 		//	登録したパターン群にマッチするMatcherを作る。
 		std::auto_ptr<Matcher>	buildMatcher()
 		{
-			return	std::auto_ptr<Matcher>(new Matcher(patterns));
+			return	std::auto_ptr<Matcher>(new Matcher(nodes));
 		}
 	};
 
@@ -91,12 +91,12 @@ public:
 	};
 
 private:
-	std::vector<Pattern>	patterns;
+	std::vector<Node>	nodes;
 
 private:
 	//	see. PatternDictionary::buildMatcher()
-	explicit	Matcher(const std::vector<Pattern>& patterns_)
-		: patterns(patterns_)
+	explicit	Matcher(const std::vector<Node>& nodes_)
+		: nodes(nodes_)
 	{}
 
 public:
@@ -114,11 +114,11 @@ public:
 
 			//itCurChrを末尾まで繰り返しながら、たどれるところまでトライをたどっていく
 			int	index = 0;
-			const Pattern	*pPat = &(patterns[index]);
+			const Node	*pNode = &(nodes[index]);
 			std::vector<chr_t>::const_iterator itC = itCurChr;
 			while ( itC != itChrE ) {
-				std::map<chr_t, int>::const_iterator	it = pPat->chrToNextIndex.find(*itC);
-				if (it == pPat->chrToNextIndex.end()) {
+				std::map<chr_t, int>::const_iterator	it = pNode->chrToNextIndex.find(*itC);
+				if (it == pNode->chrToNextIndex.end()) {
 					//遷移先がないので抜ける
 					break;
 				}
@@ -126,11 +126,11 @@ public:
 				index = it->second;
 				itC++;
 
-				pPat = &(patterns[index]);
-				if (pPat->matchPatternno>=0 ) {
+				pNode = &(nodes[index]);
+				if (pNode->matchPatternno>=0 ) {
 					//遷移先がパターンにマッチしている。
 					//この先でより長いパターンにマッチする可能性があるので、一時記録しておく。
-					patternno_best = pPat->matchPatternno;
+					patternno_best = pNode->matchPatternno;
 					itChr_best = itC;
 				}
 			}
