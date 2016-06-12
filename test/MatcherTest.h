@@ -11,10 +11,11 @@ public:
 private:
 	struct Pattern
 	{
-		std::vector<chr_t>	chrs;
-		int	patternNo;
-		Pattern(const std::vector<chr_t>& chrs_, int patternNo_)
-			: chrs(chrs_), patternNo(patternNo_)
+		std::map<chr_t, int>	chrToNextIndex;
+		int	matchPatternno;
+
+		Pattern()
+			: matchPatternno(-1)
 		{}
 	};
 
@@ -25,10 +26,38 @@ public:
 		std::vector<Pattern>	patterns;
 
 	public:
-		// [it,it_e)をpatternNoのパターンとして登録する。
-		void	addPattern(std::vector<chr_t>::const_iterator it, std::vector<chr_t>::const_iterator it_e, int patternNo)
+		PatternDictionary()
 		{
-			patterns.push_back(Pattern(std::vector<chr_t>(it, it_e), patternNo));
+			//index==0を作っておく
+			patterns.push_back(Pattern());
+		}
+	public:
+		// [it,it_e)をpatternNoのパターンとして登録する。
+		void	addPattern(std::vector<chr_t>::const_iterator itChr, std::vector<chr_t>::const_iterator itChrE, int patternNo)
+		{
+			assert( patternNo>=0 );
+			assert(itChr != itChrE);
+
+			int	index = 0;
+			for (; itChr != itChrE; itChr++) {
+				Pattern&	pat = patterns[index];
+				std::map<chr_t, int>::iterator	it = pat.chrToNextIndex.find(*itChr);
+				if (it == pat.chrToNextIndex.end()) {
+					int	next = patterns.size();
+					pat.chrToNextIndex.insert(std::make_pair(*itChr,next));
+
+					patterns.push_back(Pattern());	//patが無効になる場合あり
+					index = next;
+				}else {
+					index = it->second;
+				}
+			}
+
+			if (patterns[index].matchPatternno >= 0) {
+				//パターン重複
+				throw	std::exception();
+			}
+			patterns[index].matchPatternno = patternNo;
 		}
 
 		//	登録したパターン群にマッチするMatcherを作る。
@@ -45,7 +74,9 @@ public:
 		//size_文字のchrが、登録されたパターンpatternNo_にマッチする、を表わすMatchResultを構築する。
 		MatchResult(int size_, int patternNo_)
 			:	size(size_),	patternNo(patternNo_)
-		{}
+		{
+			assert(patternNo >= 0);
+		}
 
 		//1chrが登録されたパターンにマッチしない、を表わすMatchResultを構築する。
 		MatchResult()
@@ -78,25 +109,45 @@ public:
 
 		std::vector<chr_t>::const_iterator itCurChr = itChr;
 		while (itCurChr != itChrE) {
-			const Pattern*	pMatchPattern = nullptr;
-			for (std::vector<Pattern>::const_iterator itPat = patterns.begin(), itPatE = patterns.end(); itPat != itPatE; itPat++) {
-				std::vector<chr_t>::const_iterator it = itCurChr, itP = itPat->chrs.begin(), itPE = itPat->chrs.end();
-				while (itP != itPE && it != itChrE && *it == *itP) {
-					it++;	itP++;
+			int	patternno_best = -1;
+			std::vector<chr_t>::const_iterator itChr_best;
+
+			//itCurChrを末尾まで繰り返しながら、たどれるところまでトライをたどっていく
+			int	index = 0;
+			const Pattern	*pPat = &(patterns[index]);
+			std::vector<chr_t>::const_iterator itC = itCurChr;
+			while ( itC != itChrE ) {
+				std::map<chr_t, int>::const_iterator	it = pPat->chrToNextIndex.find(*itC);
+				if (it == pPat->chrToNextIndex.end()) {
+					//遷移先がないので抜ける
+					break;
 				}
-				if (itP == itPE) {
-					if (!pMatchPattern || itPat->chrs.size() > pMatchPattern->chrs.size()) {
-						pMatchPattern = &(*itPat);
-					}
+
+				index = it->second;
+				itC++;
+
+				pPat = &(patterns[index]);
+				if (pPat->matchPatternno>=0 ) {
+					//遷移先がパターンにマッチしている。
+					//この先でより長いパターンにマッチする可能性があるので、一時記録しておく。
+					patternno_best = pPat->matchPatternno;
+					itChr_best = itC;
 				}
 			}
-			if (pMatchPattern) {
-				size_t size = pMatchPattern->chrs.size();
-				results.push_back(MatchResult(size, pMatchPattern->patternNo));
-				std::advance(itCurChr, size);
-			}
-			else {
+
+			if (patternno_best >= 0) {
+				//途中でパターンにマッチしていたことがある。
+				//	最期にマッチしていたパターンを出力
+				results.push_back(MatchResult(std::distance(itCurChr, itChr_best), patternno_best));
+
+				//	最期にマッチしていた直後に進む
+				itCurChr = itChr_best;
+			}else{
+				//一度もマッチしたことがない。
+				//	マッチなしを出力
 				results.push_back(MatchResult());
+
+				//	次に進む
 				itCurChr++;
 			}
 		}
@@ -149,6 +200,8 @@ class MatcherTest : public CPPUNIT_NS::TestFixture
 	CPPUNIT_TEST_SUITE(MatcherTest);
 	CPPUNIT_TEST(test1);
 	CPPUNIT_TEST(test2);
+	CPPUNIT_TEST(test3);
+	CPPUNIT_TEST(test4);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -187,6 +240,45 @@ public:
 
 		commonTestParts_matchWhole(pat_a, patnum, str, expect_a, expectnum, CPPUNIT_SOURCELINE());
 	}
+
+	void test3()
+	{
+		std::string	pat_a[] = {
+			"ac",	"abc",	"abcde",	"bab",	"df",
+		};
+		size_t	patnum = sizeof(pat_a) / sizeof(*pat_a);
+		std::string	str(
+			"xabcdfx"
+		);
+		std::string	expect_a[] = {
+			"x","abc","df","x"
+			//	abc のあと d まで進み、eがくれば abcde を出力するが fが来たので abcを出力して d地点まで戻り、dfにマッチする。
+			//	戻る地点が適正でないとマッチしなくなる。
+		};
+		size_t	expectnum = sizeof(expect_a) / sizeof(*expect_a);
+
+		commonTestParts_matchWhole(pat_a, patnum, str, expect_a, expectnum, CPPUNIT_SOURCELINE());
+	}
+	
+	void test4()
+	{
+		std::string	pat_a[] = {
+			"ac",	"abc",	"abcde",	"bab",	"df",
+		};
+		size_t	patnum = sizeof(pat_a) / sizeof(*pat_a);
+		std::string	str(
+			"xabcd"
+		);
+		std::string	expect_a[] = {
+			"x","abc","d"
+			//	abc のあと d まで進み、eがくれば abcde を出力するが 終端に来たので abcを出力して d地点まで戻り、dfにマッチする。
+			//	終端が考慮できていない、または戻る地点が適正でないとマッチしなくなる。
+		};
+		size_t	expectnum = sizeof(expect_a) / sizeof(*expect_a);
+
+		commonTestParts_matchWhole(pat_a, patnum, str, expect_a, expectnum, CPPUNIT_SOURCELINE());
+	}
+
 private:
 	void	commonTestParts_matchWhole( const std::string* pat_a, size_t patnum, const std::string& str, const std::string* expect_a, size_t expectnum, const ::CppUnit::SourceLine& sourceLine )
 	{
