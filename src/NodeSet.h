@@ -92,7 +92,6 @@ public:
 				ci.i = nodeIdxToNsIdx[it->second];
 				ns.chrIndexs.push_back(ci);
 			}
-			nd.chrIndexEnd = ns.chrIndexs.size();
 
 			nd.failIndex = node.failIndex<0 ? -1 : nodeIdxToNsIdx[node.failIndex];
 			nd.matchIndex = node.matchIndex<0 ? -1 : nodeIdxToNsIdx[node.matchIndex];
@@ -144,7 +143,7 @@ private:
 	};
 	struct Nd
 	{
-		int	chrIndexBegin, chrIndexEnd;
+		int	chrIndexBegin;
 		int	matchPatternno;
 		int	failIndex;
 		int	matchIndex;
@@ -158,8 +157,13 @@ public:
 		const Nd& nd = nds[index];
 		std::vector<ChrIndex>::const_iterator itB = chrIndexs.begin();
 		std::advance(itB, nd.chrIndexBegin);
-		std::vector<ChrIndex>::const_iterator itE = chrIndexs.begin();
-		std::advance(itE, nd.chrIndexEnd);
+		std::vector<ChrIndex>::const_iterator itE;
+		if (index + 1 < nds.size()) {
+			itE = chrIndexs.begin();
+			std::advance(itE, nds[index + 1].chrIndexBegin);
+		}else{
+			itE = chrIndexs.end();
+		}
 		std::vector<ChrIndex>::const_iterator it = std::lower_bound(itB, itE, chr, Less_ChrIdxChr_Chr());
 		if ( it != itE && it->chr == chr) {
 			return	std::make_pair(true, it->i);
