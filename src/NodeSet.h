@@ -23,6 +23,22 @@ public:
 
 
 public:
+	static	std::auto_ptr<NodeSet>	buildFromNodeList(const std::vector<Node>& nodes)
+	{
+		return	buildFromNodeList( nullptr, nodes );
+	}
+	static	std::auto_ptr<NodeSet>	buildFromNodeList( std::map<int,int> *pMapNodeIndexToNodesetIndex, const std::vector<Node>& nodes)
+	{
+		if (pMapNodeIndexToNodesetIndex) {
+			pMapNodeIndexToNodesetIndex->clear();
+			for (int i = 0; i < nodes.size(); i++) {
+				pMapNodeIndexToNodesetIndex->insert(std::make_pair(i, i));
+			}
+		}
+		return	std::auto_ptr<NodeSet>(new NodeSet(nodes));
+	}
+
+private:
 	explicit	NodeSet(const std::vector<Node>& nodes_)
 		: nodes(nodes_)
 	{}

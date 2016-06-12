@@ -152,12 +152,12 @@ public:
 	};
 
 private:
-	NodeSet	ns;
+	std::auto_ptr<NodeSet>	pNs;
 
 private:
 	//	see. PatternDictionary::buildMatcher()
 	explicit	Matcher(const std::vector<NodeSet::Node>& nodes_)
-		: ns(nodes_)
+		: pNs( NodeSet::buildFromNodeList(nodes_) )
 	{}
 
 public:
@@ -191,6 +191,7 @@ private:
 	int		travaseNodeTri(std::vector<MatchResult> *pResults, int startIndex, chr_t chr)	const
 	{
 		std::vector<MatchResult>&	results = *pResults;
+		const NodeSet&	ns = *pNs;
 
 		int	index = startIndex;
 		while (true) {
