@@ -8,6 +8,22 @@ class Matcher
 public:
 	typedef	int32_t	chr_t;
 	
+	class PatternDictionary
+	{
+	public:
+		// [it,it_e)をpatternNoのパターンとして登録する。
+		void	addPattern(std::vector<chr_t>::const_iterator it, std::vector<chr_t>::const_iterator it_e, int patternNo)
+		{
+			throw	std::exception();
+		}
+
+		//	登録したパターン群にマッチするMatcherを作る。
+		std::auto_ptr<Matcher>	buildMatcher()
+		{
+			throw	std::exception();
+		}
+	};
+
 	struct MatchResult
 	{
 		int	size, patternNo;
@@ -41,12 +57,6 @@ private:
 	std::vector<Pattern>	patterns;
 
 public:
-	// [it,it_e)をpatternNoのパターンとして登録する。
-	void	addPattern(std::vector<chr_t>::const_iterator it, std::vector<chr_t>::const_iterator it_e, int patternNo)
-	{
-		patterns.push_back(Pattern(std::vector<chr_t>(it, it_e), patternNo));
-	}
-
 	// [itChr,itChrE)のchr_t列を登録されているパターン列で分割し、*pResultに書き込む。
 	//	分割は、先頭から貪欲に最長パターン一致で行う。
 	void	matchWhole(std::vector<MatchResult> *pResults, std::vector<chr_t>::const_iterator itChr, std::vector<chr_t>::const_iterator itChrE)	const
@@ -80,6 +90,7 @@ public:
 		}
 	}
 };
+
 
 inline	std::ostream&	operator<<(std::ostream& ostm, const Matcher::MatchResult& res)
 {
@@ -128,18 +139,7 @@ class MatcherTest : public CPPUNIT_NS::TestFixture
 	CPPUNIT_TEST(test2);
 	CPPUNIT_TEST_SUITE_END();
 
-private:
-	std::auto_ptr<Matcher>	pMatcher;
 public:
-	void setUp()
-	{
-		pMatcher = std::auto_ptr<Matcher>(new Matcher());
-	}
-	void tearDown()
-	{
-		pMatcher.reset();
-	}
-
 	void test1()
 	{
 		std::string	pat_a[] = {
@@ -178,14 +178,17 @@ public:
 private:
 	void	commonTestParts_matchWhole( const std::string* pat_a, size_t patnum, const std::string& str, const std::string* expect_a, size_t expectnum, const ::CppUnit::SourceLine& sourceLine )
 	{
+		Matcher::PatternDictionary	dictionary;
+		
 		std::map<std::string, int>	patternToNo;
 		for (int i = 0; i<patnum; i++) {
 			std::vector<Matcher::chr_t>	chrs(pat_a[i].begin(), pat_a[i].end());
 			int	patternNo = i;
-			pMatcher->addPattern(chrs.begin(), chrs.end(), i);
+			dictionary.addPattern(chrs.begin(), chrs.end(), i);
 
 			patternToNo.insert(std::make_pair(pat_a[i], i));
 		}
+		std::auto_ptr<Matcher>	pMatcher( dictionary.buildMatcher() );
 
 		std::vector<Matcher::MatchResult>	expects;
 		for (int i = 0; i < expectnum; i++) {
