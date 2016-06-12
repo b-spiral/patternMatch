@@ -164,12 +164,55 @@ public:
 	};
 
 private:
-	std::vector<Node>	nodes;
+	class NodeSet
+	{
+	public:
+		explicit	NodeSet(const std::vector<Node>& nodes_)
+			: nodes(nodes_)
+		{}
+
+	private:
+		std::vector<Node>	nodes;
+
+	public:
+		std::pair<bool, int>	searchNext(int index, chr_t chr)	const
+		{
+			const Node&	node = nodes[index];
+			std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.find(chr);
+			if (it != node.chrToNextIndex.end()) {
+				return	std::make_pair(true, it->second);
+			}
+			else {
+				return	std::make_pair(false, -1);
+			}
+		}
+		int	getMatchIndex(int index)	const
+		{
+			const Node&	node = nodes[index];
+			return	node.matchIndex;
+		}
+		int	getFailIndex(int index)	const
+		{
+			const Node&	node = nodes[index];
+			return	node.failIndex;
+		}
+		int	getDepth(int index)	const
+		{
+			const Node&	node = nodes[index];
+			return	node.depth;
+		}
+		int	getMatchPatternno(int index)	const
+		{
+			const Node&	node = nodes[index];
+			return	node.matchPatternno;
+		}
+	};
+	NodeSet	ns;
 
 private:
 	//	see. PatternDictionary::buildMatcher()
 	explicit	Matcher(const std::vector<Node>& nodes_)
-		: nodes(nodes_)
+		: ns(nodes_)
 	{}
 
 public:
@@ -198,37 +241,6 @@ public:
 	}
 
 private:
-	std::pair<bool, int>	searchNext(int index, chr_t chr)	const
-	{
-		const Node&	node = nodes[index];
-		std::map<chr_t, int>::const_iterator it = node.chrToNextIndex.find(chr);
-		if (it != node.chrToNextIndex.end()) {
-			return	std::make_pair(true, it->second);
-		}
-		else {
-			return	std::make_pair(false, -1);
-		}
-	}
-	int	getMatchIndex(int index)	const
-	{
-		const Node&	node = nodes[index];
-		return	node.matchIndex;
-	}
-	int	getFailIndex(int index)	const
-	{
-		const Node&	node = nodes[index];
-		return	node.failIndex;
-	}
-	int	getDepth(int index)	const
-	{
-		const Node&	node = nodes[index];
-		return	node.depth;
-	}
-	int	getMatchPatternno(int index)	const
-	{
-		const Node&	node = nodes[index];
-		return	node.matchPatternno;
-	}
 
 	//	startIndexノードの状態でchr文字を読み込んで状態遷移した先のノードindexを返す。遷移中に確定したマッチ結果を*pResultに追記する。
 	int		travaseNodeTri(std::vector<MatchResult> *pResults, int startIndex, chr_t chr)	const
@@ -237,7 +249,7 @@ private:
 
 		int	index = startIndex;
 		while (true) {
-			std::pair<bool, int>	next = searchNext(index, chr);
+			std::pair<bool, int>	next = ns.searchNext(index, chr);
 			if ( next.first ) {
 				//注目文字で遷移できる
 				//	遷移して次の文字に進む
@@ -252,29 +264,29 @@ private:
 				}
 				else {
 					int	lastDepth;
-					if (getMatchIndex(index) >= INDEX_ROOT) {
+					if (ns.getMatchIndex(index) >= INDEX_ROOT) {
 						//経路上にマッチしたパターンがあった
 
 						//パターン出力
-						results.push_back(MatchResult(getDepth(getMatchIndex(index)), getMatchPatternno(getMatchIndex(index))) );
+						results.push_back(MatchResult(ns.getDepth(ns.getMatchIndex(index)), ns.getMatchPatternno(ns.getMatchIndex(index))) );
 
-						lastDepth = getDepth(index) - getDepth(getMatchIndex(index));
+						lastDepth = ns.getDepth(index) - ns.getDepth(ns.getMatchIndex(index));
 
 					}
 					else {
 						//経路上にマッチしたパターンはなかった
-						lastDepth = getDepth(index);
+						lastDepth = ns.getDepth(index);
 					}
 
 					//fail遷移で注目ノードのdepthが浅くなる = マッチしなかった文字を読み飛ばしている
 					//読み飛ばした文字分を出力
-					int	skipnum = lastDepth - getDepth( getFailIndex(index) );
+					int	skipnum = lastDepth - ns.getDepth(ns.getFailIndex(index) );
 					for (int i = 0; i < skipnum; i++) {
 						results.push_back(MatchResult());
 					}
 
 					//fail遷移して同じ文字でもう一度処理
-					index = getFailIndex(index);
+					index = ns.getFailIndex(index);
 				}
 			}
 		}
